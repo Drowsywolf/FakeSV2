@@ -16,6 +16,9 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from torch.utils.data import Dataset
 from transformers import BertTokenizer
 
+import math
+
+# 中文单位换算数字
 def str2num(str_x):
     if isinstance(str_x, float):
         return str_x
@@ -40,8 +43,8 @@ class SVFENDDataset(Dataset):
         self.data_complete = pd.read_json('./data/data.json',orient='records',dtype=False,lines=True)
         self.data_complete = self.data_complete[self.data_complete['label']!=2] # label: 0-real, 1-fake, 2-debunk
 
-        self.framefeapath='./data/ptvgg19_frames/'
-        self.c3dfeapath='./data/c3d/'
+        self.framefeapath='./dataset/ptvgg19_frames/'
+        self.c3dfeapath='./dataset/c3d/'
 
         self.vid = []
         
@@ -61,7 +64,7 @@ class SVFENDDataset(Dataset):
     def __len__(self):
         return self.data.shape[0]
      
-    def __getitem__(self, idx):
+    def __getitem__(self, idx): # idx: "train", "val", "test"
         item = self.data.iloc[idx]
         vid = item['video_id']
 
@@ -354,13 +357,14 @@ class FANVMDataset_test(Dataset):
         }
 
 
+# 没用到pytorch
 class TikTecDataset(Dataset):
 
     def __init__(self, path_vid):
-        self.data_complete = pd.read_json('./data/data.json',orient='records',dtype=False,lines=True)
+        self.data_complete = pd.read_json('./dataset/data.json',orient='records',dtype=False,lines=True)
 
         self.vid = []
-        with open(f'./data/vids/{path_vid}', "r") as fr:
+        with open(f'./dataset/data-split/event/{path_vid}', "r") as fr:
             for line in fr.readlines():
                 self.vid.append(line.strip())
         self.data = self.data_complete[self.data_complete['video_id'].isin(self.vid)]
@@ -420,7 +424,7 @@ class TikTecDataset(Dataset):
             'label': label,
             'caption_feature': caption_feature,
             'visual_feature': visual_feature,
-            'asr_feature': asr_feature,
+            'asr_feature': asr_feature, #(Automated Speech Recognition) text
             'mask_K': mask_K,
             'mask_N': mask_N,
         }

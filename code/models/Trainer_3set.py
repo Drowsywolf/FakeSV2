@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as transforms
-import tqdm
+import tqdm # 进度条库
 from sklearn.metrics import *
 from tqdm import tqdm
 from transformers import BertModel

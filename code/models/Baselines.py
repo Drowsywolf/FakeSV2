@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from einops import rearrange
 from transformers import BertModel
 from .layers import Attention
 
+# 用不到的model
 
 class bBbox(torch.nn.Module):
     def __init__(self,fea_dim):

@@ -21,7 +21,7 @@ from utils.metrics import *
 
 
 class SVFENDModel(torch.nn.Module):
-    def __init__(self,bert_model,fea_dim,dropout):
+    def __init__(self,bert_model,fea_dim,dropout): # bert_model='bert-base-chinese', fea_dim=128,dropout=self.dropout
         super(SVFENDModel, self).__init__()
 
         self.bert = BertModel.from_pretrained(bert_model).requires_grad_(False)
@@ -62,20 +62,20 @@ class SVFENDModel(torch.nn.Module):
     
     def forward(self,  **kwargs):
 
-        ### User Intro ###
+        ### User Intro ### Transcript，用Bert和线性层提取
         intro_inputid = kwargs['intro_inputid']
         intro_mask = kwargs['intro_mask']
         fea_intro = self.bert(intro_inputid,attention_mask=intro_mask)[1]
         fea_intro = self.linear_intro(fea_intro) 
 
-        ### Title ###
+        ### Title ### 标题，用Bert和线性层提取
         title_inputid = kwargs['title_inputid']#(batch,512)
         title_mask=kwargs['title_mask']#(batch,512)
 
         fea_text=self.bert(title_inputid,attention_mask=title_mask)['last_hidden_state']#(batch,sequence,768)
         fea_text=self.linear_text(fea_text) 
 
-        ### Audio Frames ###
+        ### Audio Frames ### 音频帧，用vggish提取
         audioframes=kwargs['audioframes']#(batch,36,12288)
         audioframes_masks = kwargs['audioframes_masks']
         fea_audio = self.vggish_modified(audioframes) #(batch, frames, 128)
@@ -83,7 +83,7 @@ class SVFENDModel(torch.nn.Module):
         fea_audio, fea_text = self.co_attention_ta(v=fea_audio, s=fea_text, v_len=fea_audio.shape[1], s_len=fea_text.shape[1])
         fea_audio = torch.mean(fea_audio, -2)
 
-        ### Image Frames ###
+        ### Image Frames ### KeyFrames关键帧，用VGG19提取
         frames=kwargs['frames']#(batch,30,4096)
         frames_masks = kwargs['frames_masks']
         fea_img = self.linear_img(frames) 
@@ -124,10 +124,10 @@ class SVFENDModel(torch.nn.Module):
         fea_video = fea_video.unsqueeze(1)
         fea_intro = fea_intro.unsqueeze(1)
 
-        fea=torch.cat((fea_text,fea_audio, fea_video, fea_intro,fea_img, fea_comments),1) # (bs, 6, 128)
-        fea = self.trm(fea)
+        fea=torch.cat((fea_text,fea_audio, fea_video, fea_intro,fea_img, fea_comments),1) # (bs, 6, 128) concatenate
+        fea = self.trm(fea) # TransformerEncoderLayer
         fea = torch.mean(fea, -2)
         
-        output = self.classifier(fea)
+        output = self.classifier(fea) # 线性层
 
         return output, fea

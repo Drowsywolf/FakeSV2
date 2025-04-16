@@ -19,6 +19,7 @@ from zmq import device
 from .coattention import *
 from .layers import *
 
+# 估计用不到，用Trainer3
 
 
 class Trainer():

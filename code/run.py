@@ -333,11 +333,13 @@ class Run():
 
     def get_dataloader(self,data_type,data_fold):
         collate_fn=None
-
+        print("Using get_dataloader", data_type, data_fold)
         if data_type=='SVFEND':
-            dataset_train = SVFENDDataset(f'vid_fold_no_{data_fold}.txt')
+            print("Using SVFENDDataset")
+            dataset_train = SVFENDDataset(f'vid_fold_{data_fold}.txt')
             dataset_test = SVFENDDataset(f'vid_fold_{data_fold}.txt')
             collate_fn=SVFEND_collate_fn
+            print(dataset_train[0]['frames'].shape)
         elif data_type=='FANVM':
             dataset_train = FANVMDataset_train(f'vid_fold_no_{data_fold}.txt')
             dataset_test = FANVMDataset_test(path_vid_train=f'vid_fold_no_{data_fold}.txt', path_vid_test=f'vid_fold_{data_fold}.txt')
@@ -363,6 +365,10 @@ class Run():
             dataset_train = Title_W2V_Dataset(f'vid_fold_no{data_fold}.txt', wv_from_text)
             dataset_test = Title_W2V_Dataset(f'vid_fold_{data_fold}.txt', wv_from_text)
             collate_fn = title_w2v_collate_fn
+        elif data_type=="TikTec":
+            dataset_train = TikTecDataset(f'vid_fold_{data_fold}.txt')
+            dataset_test = TikTecDataset(f'vid_fold_{data_fold}.txt')
+            collate_fn = None
 
         train_dataloader = DataLoader(dataset_train, batch_size=self.batch_size,
             num_workers=self.num_workers,
@@ -424,8 +430,11 @@ class Run():
 
 
     def get_model(self):
+        # 主modelSVFEND
         if self.model_name == 'SVFEND':
             self.model = SVFENDModel(bert_model='bert-base-chinese', fea_dim=128,dropout=self.dropout)
+        
+        # Baseline的和FANVM的model，用不到
         elif self.model_name == 'FANVM':
             self.model = FANVMModel(bert_model='bert-base-chinese', fea_dim=128)
             self.data_type = "FANVM"
@@ -447,24 +456,27 @@ class Run():
             self.model = bTextCNN(fea_dim=128, vocab_size=100)
             self.data_type = "w2v"
         elif self.model_name == 'Comments':
+
             self.model = bComments(bert_model='bert-base-chinese', fea_dim=128)
             self.data_type = "comments"
+        # TikTec的model
         elif self.model_name == 'TikTec':
             self.model = TikTecModel(VCIF_dropout=self.dropout, MLP_dropout=self.dropout)
-            self.data_type = 'TikTec'
+            self.data_type = 'SVFEND'
+
 
         return self.model
 
 
     def main(self):
-        if self.mode_eval == "nocv":
+        if self.mode_eval == "nocv": # non-chronological order?
             self.model = self.get_model()
             dataloaders = self.get_dataloader(data_type=self.data_type, data_fold=self.fold)
             trainer = Trainer(model=self.model, device = self.device, lr = self.lr, dataloaders = dataloaders, epoches = self.epoches, dropout = self.dropout, weight_decay = self.weight_decay, mode = self.mode, model_name = self.model_name, event_num = self.event_num, 
                     epoch_stop = self.epoch_stop, save_param_path = self.save_param_dir+self.data_type+"/"+self.model_name+"/", writer = SummaryWriter(self.path_tensorboard))
             result=trainer.train()
 
-        elif self.mode_eval == "temporal":
+        elif self.mode_eval == "temporal": # temporal order?
             self.model = self.get_model()
             dataloaders = self.get_dataloader_temporal(data_type=self.data_type)
             trainer = Trainer3(model=self.model, device = self.device, lr = self.lr, dataloaders = dataloaders, epoches = self.epoches, dropout = self.dropout, weight_decay = self.weight_decay, mode = self.mode, model_name = self.model_name, event_num = self.event_num, 
@@ -472,23 +484,36 @@ class Run():
             result=trainer.train()
             return result
         
-        elif self.mode_eval == "cv":
+        elif self.mode_eval == "cv": # chronological order?
+            # 没什么用的两个变量
             collate_fn=None
             if self.model_name == 'TextCNN':
                 wv_from_text = KeyedVectors.load_word2vec_format("./stores/tencent-ailab-embedding-zh-d100-v0.2.0-s/tencent-ailab-embedding-zh-d100-v0.2.0-s.txt", binary=False)
 
             history = collections.defaultdict(list) 
+           
+            # 5折交叉验证
             for fold in range(1, 6): 
                 print('-' * 50)
                 print ('fold %d:' % fold)
                 print('-' * 50)
-                self.model = self.get_model()
-                dataloaders = self.get_dataloader(data_type=self.data_type, data_fold=fold)
-                trainer = Trainer(model = self.model, device = self.device, lr = self.lr, dataloaders = dataloaders, epoches = self.epoches, dropout = self.dropout, weight_decay = self.weight_decay, mode = self.mode, model_name = self.model_name, event_num = self.event_num, 
+
+                # 剩下的和上面一样，run的关键部分
+                ##############################################################
+                self.model = self.get_model() # 458行, TikTecModel, 同时会设置下面self.data_type
+                dataloaders = self.get_dataloader(data_type=self.data_type, data_fold=fold) # data_type决定loader类型（TikTec或SVFEND）, data fold（1~6）关系上面读取的vid_fold_{data_fold}.txt
+                trainer = Trainer(model = self.model, 
+                                  device = self.device, 
+                                  lr = self.lr, 
+                                  dataloaders = dataloaders, 
+                                  epoches = self.epoches, dropout = self.dropout, weight_decay = self.weight_decay, mode = self.mode, model_name = self.model_name, event_num = self.event_num, 
                     epoch_stop = self.epoch_stop, save_param_path = self.save_param_dir+self.data_type+"/"+self.model_name+"/", writer = SummaryWriter(self.path_tensorboard+"fold_"+str(fold)+"/"))
        
                 result = trainer.train()
+                ##############################################################
 
+
+                # 保存evalutions
                 history['auc'].append(result['auc'])
                 history['f1'].append(result['f1'])
                 history['recall'].append(result['recall'])
