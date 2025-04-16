@@ -143,3 +143,4 @@ class TikTecModel(nn.Module):
         video_rep = self.VCIF(frame_visual_rep, text_audio_rep, mask_K, mask_N)
         output = self.MLP(video_rep)
         return output
+    

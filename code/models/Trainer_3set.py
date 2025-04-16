@@ -41,7 +41,7 @@ class Trainer3():
         self.model = model
 
         self.device = device
-        self.mode = mode
+        self.mode = mode # "normal"
         self.model_name = model_name
         self.event_num = event_num
 
@@ -77,9 +77,9 @@ class Trainer3():
 
         is_earlystop = False
 
-        if self.mode == "eann":
-            best_acc_val_event = 0.0
-            best_epoch_val_event = 0
+        # if self.mode == "eann":
+        #     best_acc_val_event = 0.0
+        #     best_epoch_val_event = 0
 
         for epoch in range(self.start_epoch, self.start_epoch+self.num_epochs):
             if is_earlystop:
@@ -106,33 +106,33 @@ class Trainer3():
                 tpred = []
                 tlabel = []
 
-                if self.mode == "eann":
-                    running_loss_event = 0.0
-                    tpred_event = []
-                    tlabel_event = []
+                # if self.mode == "eann":
+                #     running_loss_event = 0.0
+                #     tpred_event = []
+                #     tlabel_event = []
 
                 for batch in tqdm(self.dataloaders[phase]):
                     batch_data=batch
                     for k,v in batch_data.items():
                         batch_data[k]=v.cuda()
                     label = batch_data['label']
-                    if self.mode == "eann":
-                        label_event = batch_data['label_event']
+                    # if self.mode == "eann":
+                    #     label_event = batch_data['label_event']
 
                     self.optimizer.zero_grad()
 
                     with torch.set_grad_enabled(phase == 'train'):
-                        if self.mode == "eann":
-                            outputs, outputs_event,fea = self.model(**batch_data)
-                            loss_fnd = self.criterion(outputs, label)
-                            loss_event = self.criterion(outputs_event, label_event)
-                            loss = loss_fnd + loss_event
-                            _, preds = torch.max(outputs, 1)
-                            _, preds_event = torch.max(outputs_event, 1)
-                        else:
-                            outputs,fea = self.model(**batch_data)
-                            _, preds = torch.max(outputs, 1)
-                            loss = self.criterion(outputs, label)
+                        # if self.mode == "eann":
+                        #     outputs, outputs_event,fea = self.model(**batch_data)
+                        #     loss_fnd = self.criterion(outputs, label)
+                        #     loss_event = self.criterion(outputs_event, label_event)
+                        #     loss = loss_fnd + loss_event
+                        #     _, preds = torch.max(outputs, 1)
+                        #     _, preds_event = torch.max(outputs_event, 1)
+                        # else:
+                        outputs,fea = self.model(**batch_data)
+                        _, preds = torch.max(outputs, 1)
+                        loss = self.criterion(outputs, label)
 
                         if phase == 'train':
                             loss.backward()
@@ -144,11 +144,11 @@ class Trainer3():
                     tpred.extend(preds.detach().cpu().numpy().tolist())
                     running_loss += loss.item() * label.size(0)
 
-                    if self.mode == "eann":
-                        tlabel_event.extend(label_event.detach().cpu().numpy().tolist())
-                        tpred_event.extend(preds_event.detach().cpu().numpy().tolist())
-                        running_loss_event += loss_event.item() * label_event.size(0)
-                        running_loss_fnd += loss_fnd.item() * label.size(0)
+                    # if self.mode == "eann":
+                    #     tlabel_event.extend(label_event.detach().cpu().numpy().tolist())
+                    #     tpred_event.extend(preds_event.detach().cpu().numpy().tolist())
+                    #     running_loss_event += loss_event.item() * label_event.size(0)
+                    #     running_loss_fnd += loss_fnd.item() * label.size(0)
                     
                 epoch_loss = running_loss / len(self.dataloaders[phase].dataset)
                 print('Loss: {:.4f} '.format(epoch_loss))
@@ -158,13 +158,13 @@ class Trainer3():
                 self.writer.add_scalar('Acc/'+phase, results['acc'], epoch+1)
                 self.writer.add_scalar('F1/'+phase, results['f1'], epoch+1)
 
-                if self.mode == "eann":
-                    epoch_loss_fnd = running_loss_fnd / len(self.dataloaders[phase].dataset)
-                    print('Loss_fnd: {:.4f} '.format(epoch_loss_fnd))
-                    epoch_loss_event = running_loss_event / len(self.dataloaders[phase].dataset)
-                    print('Loss_event: {:.4f} '.format(epoch_loss_event))
-                    self.writer.add_scalar('Loss_fnd/'+phase, epoch_loss_fnd, epoch+1)
-                    self.writer.add_scalar('Loss_event/'+phase, epoch_loss_event, epoch+1)
+                # if self.mode == "eann":
+                #     epoch_loss_fnd = running_loss_fnd / len(self.dataloaders[phase].dataset)
+                #     print('Loss_fnd: {:.4f} '.format(epoch_loss_fnd))
+                #     epoch_loss_event = running_loss_event / len(self.dataloaders[phase].dataset)
+                #     print('Loss_event: {:.4f} '.format(epoch_loss_event))
+                #     self.writer.add_scalar('Loss_fnd/'+phase, epoch_loss_fnd, epoch+1)
+                #     self.writer.add_scalar('Loss_event/'+phase, epoch_loss_event, epoch+1)
 
                 if phase == 'val' and results['acc'] > best_acc_val:
                     best_acc_val = results['acc']
@@ -178,13 +178,15 @@ class Trainer3():
                             is_earlystop = True
                             print ("early stopping...")
                 
+
+
         time_elapsed = time.time() - since
         print('Training complete in {:.0f}m {:.0f}s'.format(
             time_elapsed // 60, time_elapsed % 60))
         print("Best model on val: epoch" + str(best_epoch_val) + "_" + str(best_acc_val))
 
-        if self.mode == "eann":
-            print("Event: Best model on val: epoch" + str(best_epoch_val_event) + "_" + str(best_acc_val_event))
+        # if self.mode == "eann":
+        #     print("Event: Best model on val: epoch" + str(best_epoch_val_event) + "_" + str(best_acc_val_event))
 
     
         self.model.load_state_dict(best_model_wts_val)
@@ -195,7 +197,7 @@ class Trainer3():
 
 
     def test(self):
-        since = time.time()
+        # since = time.time()
 
         self.model.cuda()
         self.model.eval()   
@@ -203,9 +205,9 @@ class Trainer3():
         pred = []
         label = []
 
-        if self.mode == "eann":
-            pred_event = []
-            label_event = []
+        # if self.mode == "eann":
+        #     pred_event = []
+        #     label_event = []
 
         for batch in tqdm(self.dataloaders['test']):
             with torch.no_grad(): 
@@ -214,15 +216,15 @@ class Trainer3():
                     batch_data[k]=v.cuda()
                 batch_label = batch_data['label']
 
-                if self.mode == "eann":
-                    batch_label_event = batch_data['label_event']
-                    batch_outputs, batch_outputs_event, fea = self.model(**batch_data)
-                    _, batch_preds_event = torch.max(batch_outputs_event, 1)
+                # if self.mode == "eann":
+                #     batch_label_event = batch_data['label_event']
+                #     batch_outputs, batch_outputs_event, fea = self.model(**batch_data)
+                #     _, batch_preds_event = torch.max(batch_outputs_event, 1)
 
-                    label_event.extend(batch_label_event.detach().cpu().numpy().tolist())
-                    pred_event.extend(batch_preds_event.detach().cpu().numpy().tolist())
-                else: 
-                    batch_outputs,fea = self.model(**batch_data) 
+                #     label_event.extend(batch_label_event.detach().cpu().numpy().tolist())
+                #     pred_event.extend(batch_preds_event.detach().cpu().numpy().tolist())
+                # else: 
+                batch_outputs,fea = self.model(**batch_data) 
 
                 _, batch_preds = torch.max(batch_outputs, 1)
 
@@ -233,9 +235,9 @@ class Trainer3():
         print (get_confusionmatrix_fnd(np.array(pred), np.array(label)))
         print (metrics(label, pred))
 
-        if self.mode == "eann" and self.model_name != "FANVM":
-            print ("event:")
-            print (accuracy_score(np.array(label_event), np.array(pred_event)))
+        # if self.mode == "eann" and self.model_name != "FANVM":
+        #     print ("event:")
+        #     print (accuracy_score(np.array(label_event), np.array(pred_event)))
 
         return metrics(label, pred)
     
