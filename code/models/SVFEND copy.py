@@ -8,7 +8,7 @@ from tensorflow.keras import layers, Model
 from sklearn.metrics import *
 from tqdm import tqdm
 from transformers import TFAutoModel, AutoConfig
-# 假设已实现以下自定义层
+
 from .coattention import *
 from .layers import *
 from utils.metrics import *
@@ -17,10 +17,10 @@ class SVFENDModel(Model):
     def __init__(self, bert_model, fea_dim, dropout):
         super(SVFENDModel, self).__init__()
         
-        # BERT模型初始化（冻结参数）
-        self.bert = TFAutoModel.from_pretrained(bert_model, trainable=False)  # TF2.x使用TFAutoModel
+
+        self.bert = TFAutoModel.from_pretrained(bert_model, trainable=False)  
         
-        # 维度参数设置（与原PyTorch代码保持一致）
+
         self.text_dim = 768
         self.comment_dim = 768
         self.img_dim = 4096
