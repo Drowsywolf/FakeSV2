@@ -18,7 +18,6 @@ class MLP(nn.Module):
     def forward(self, input):
         return self.mlp(input)
 
-# VCIF里用到一次, attention
 class MaskAvg(nn.Module):
     def __init__(self):
         super(MaskAvg, self).__init__()
@@ -41,8 +40,6 @@ class CVRL(nn.Module):
     def forward(self, caption_feature, visual_feature):
         # IN: caption_feature: (bs, K, S, d_w), visual_feature: (bs, K, obj_num, d_f)
         # OUT: frame_visual_rep: (bs, K, d_f)
-
-        
         encoded_caption, _ = self.gru(caption_feature.view(-1, caption_feature.shape[-2], caption_feature.shape[-1]))  # (bs*K, S, 2*gru_dim)
         encoded_caption = encoded_caption.view(-1, caption_feature.shape[-3], caption_feature.shape[-2], encoded_caption.shape[-1])  # (bs, K, S, 2*gru_dim)
         frame_caption_rep = encoded_caption.max(dim=2).values  # (bs, K, 2*gru_dim)
@@ -114,8 +111,6 @@ class VCIF(nn.Module):
         video_rep = torch.cat([visual_rep, speech_rep], dim=-1)
         return video_rep
 
-
-# 主要model
 class TikTecModel(nn.Module):
     def __init__(self, word_dim=300, mfcc_dim=650, visual_dim=1000, obj_num=45, CVRL_gru_dim=200, ASRL_gru_dim=500, VCIF_d_H=200, VCIF_gru_f_dim=200, VCIF_gru_w_dim=100, VCIF_dropout=0.2, MLP_hidden_dims=[512], MLP_dropout=0.2):
         super(TikTecModel, self).__init__()
@@ -143,4 +138,3 @@ class TikTecModel(nn.Module):
         video_rep = self.VCIF(frame_visual_rep, text_audio_rep, mask_K, mask_N)
         output = self.MLP(video_rep)
         return output
-    
