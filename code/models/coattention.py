@@ -1,6 +1,7 @@
 
 import tensorflow as tf
 from tensorflow.keras import layers
+from .trm import *
 
 # You would need to define your LayerNormalization, PosEncoding, Linear, ScaledDotProductAttention exactly like you had them in PyTorch.
 
