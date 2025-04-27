@@ -11,6 +11,8 @@ from sklearn import preprocessing
 from sklearn.decomposition import LatentDirichletAllocation
 from sklearn.feature_extraction.text import TfidfVectorizer
 from scipy.spatial import distance
+import torch
+import torch.nn as nn
 
 def str2num(str_x):
     if isinstance(str_x, float):
@@ -27,26 +29,31 @@ def str2num(str_x):
 
 class SVFENDDataset():
     def __init__(self, path_vid, datamode='title+ocr'):
+        print("SVFENDDataset, init")
         with open('./dataset/dict_vid_audioconvfea.pkl', "rb") as fr:
             self.dict_vid_convfea = pickle.load(fr)
 
+        print("Loading data...")
         self.data_complete = pd.read_json('./dataset/data_complete_100.json', orient='records', dtype=False, lines=True)
-        self.data_complete = self.data_complete[self.data_complete['label'] != 2]
+        self.data_complete = self.data_complete[self.data_complete['annotation'] != '辟谣']
 
-        self.framefeapath = './dataset/ptvgg19_frames/'
-        self.c3dfeapath = './dataset/c3d/'
+        self.framefeapath = './dataset/ptvgg19_frames/ptvgg19_frames/'
+        self.c3dfeapath = './dataset/c3d/c3d/'
 
+        print("Loading video list...")
         self.vid = []
-        with open('./data-split/event/' + path_vid, "r") as fr:
+        with open('./dataset/data-split/event/' + path_vid, "r") as fr:
             for line in fr.readlines():
                 self.vid.append(line.strip())
         
+        print("Loading video features...")
         self.data = self.data_complete[self.data_complete.video_id.isin(self.vid)].copy()
         self.data['video_id'] = self.data['video_id'].astype('category')
         self.data['video_id'].cat.set_categories(self.vid, inplace=True)
         self.data.sort_values('video_id', ascending=True, inplace=True)
         self.data.reset_index(drop=True, inplace=True)
 
+        print(1)
         self.tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
         self.datamode = datamode
 
@@ -63,11 +70,11 @@ class SVFENDDataset():
 
         # text
         if self.datamode == 'title+ocr':
-            text = item['description'] + ' ' + item['ocr']
+            text = item['title'] + ' ' + item['ocr']
         elif self.datamode == 'ocr':
             text = item['ocr']
         elif self.datamode == 'title':
-            text = item['description']
+            text = item['title']
         title_tokens = self.tokenizer(text, max_length=512, padding='max_length', truncation=True)
         title_inputid = tf.convert_to_tensor(title_tokens['input_ids'], dtype=tf.int32)
         title_mask = tf.convert_to_tensor(title_tokens['attention_mask'], dtype=tf.int32)
@@ -81,12 +88,16 @@ class SVFENDDataset():
             comments_mask.append(comment_tokens['attention_mask'])
         comments_inputid = tf.convert_to_tensor(np.array(comments_inputid), dtype=tf.int32)
         comments_mask = tf.convert_to_tensor(np.array(comments_mask), dtype=tf.int32)
+        # comments_inputid = torch.LongTensor(np.array(comments_inputid)) 
+        # comments_mask = torch.LongTensor(np.array(comments_mask))
+
 
         comments_like = []
-        for num in item['comments_like']:
+        for num in item['count_comment_like']:
             num_like = num.split(" ")[0]
             comments_like.append(str2num(num_like))
         comments_like = tf.convert_to_tensor(comments_like, dtype=tf.float32)
+        # comments_like = torch.tensor(comments_like)
 
         # audio frames
         audioframes = self.dict_vid_convfea[vid]

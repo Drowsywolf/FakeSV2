@@ -23,18 +23,18 @@ def pad_sequence(seq_len,lst, emb):
             video = tf.stack(video)
         ori_len=video.shape[0]
         if ori_len == 0:
-            video = tf.zeros([seq_len,emb],dtype=tf.long)
+            video = tf.zeros([seq_len,emb], dtype=tf.int32)
         elif ori_len>=seq_len:
             if emb == 200:
-                video=tf.FloatTensor(video[:seq_len])
+                video=tf.convert_to_tensor(video[:seq_len], dtype=tf.int32)
             else:
-                video=tf.LongTensor(video[:seq_len])
+                video=tf.convert_to_tensor(video[:seq_len], dtype=tf.int32)
         else:
-            video=tf.cat([video,tf.zeros([seq_len-ori_len,video.shape[1]],dtype=tf.long)],dim=0)
+            video=tf.concat([video,tf.zeros([seq_len-ori_len,video.shape[1]], dtype=tf.int32)],axis=0)
             if emb == 200:
-                video=tf.FloatTensor(video)
+                video=tf.convert_to_tensor(video, dtype=tf.int32)
             else:
-                video=tf.LongTensor(video)
+                video=tf.convert_to_tensor(video, dtype=tf.int32)
         result.append(video)
     return tf.stack(result)
 
@@ -47,9 +47,9 @@ def pad_sequence_bbox(seq_len,lst):
         if ori_len == 0:
             video = tf.zeros([seq_len,45,4096],dtype=tf.float)
         elif ori_len>=seq_len:
-            video=tf.FloatTensor(video[:seq_len])
+            video=tf.convert_to_tensor(video[:seq_len])
         else:
-            video=tf.cat([video,tf.zeros([seq_len-ori_len,45,4096],dtype=tf.float)],dim=0)
+            video=tf.concat([video,tf.zeros([seq_len-ori_len,45,4096], dtype=tf.int32)],axis=0)
         result.append(video)
     return tf.stack(result)
 
@@ -57,17 +57,17 @@ def pad_frame_sequence(seq_len,lst):
     attention_masks = []
     result=[]
     for video in lst:
-        video=tf.FloatTensor(video)
+        video=tf.convert_to_tensor(video)
         ori_len=video.shape[0]
         if ori_len>=seq_len:
             gap=ori_len//seq_len
             video=video[::gap][:seq_len]
             mask = np.ones((seq_len))
         else:
-            video=tf.cat((video,tf.zeros([seq_len-ori_len,video.shape[1]],dtype=tf.float)),dim=0)
+            video=tf.concat((video,tf.zeros([seq_len-ori_len,video.shape[1]], dtype=tf.float32)),axis=0)
             mask = np.append(np.ones(ori_len), np.zeros(seq_len-ori_len))
         result.append(video)
-        mask = tf.IntTensor(mask)
+        mask = tf.convert_to_tensor(mask, dtype=tf.int32)
         attention_masks.append(mask)
     return tf.stack(result), tf.stack(attention_masks)
 
@@ -98,7 +98,7 @@ def SVFEND_collate_fn(batch):
         comments_like_one = comments_like[idx]
         comments_inputid_one = comments_inputid[idx]
         comments_mask_one = comments_mask[idx]
-        if comments_like_one.shape != tf.constant([]):
+        if comments_like_one.shape != torch.Size([0]):
             comments_inputid_one, comments_mask_one, comments_like_one = (list(t) for t in zip(*sorted(zip(comments_inputid_one, comments_mask_one, comments_like_one), key=lambda s: s[2], reverse=True)))
         comments_inputid_resorted.append(comments_inputid_one)
         comments_mask_resorted.append(comments_mask_one)
@@ -110,12 +110,12 @@ def SVFEND_collate_fn(batch):
     for idx in range(len(comments_like_resorted)):
         comments_like_resorted_one = comments_like_resorted[idx]
         if len(comments_like_resorted_one)>=num_comments:
-            comments_like.append(tf.tensor(comments_like_resorted_one[:num_comments]))
+            comments_like.append(tf.convert_to_tensor(comments_like_resorted_one[:num_comments]))
         else:
             if isinstance(comments_like_resorted_one, list):
-                comments_like.append(tf.tensor(comments_like_resorted_one+[0]*(num_comments-len(comments_like_resorted_one))))
+                comments_like.append(tf.convert_to_tensor(comments_like_resorted_one+[0]*(num_comments-len(comments_like_resorted_one))))
             else:
-                comments_like.append(tf.tensor(comments_like_resorted_one.tolist()+[0]*(num_comments-len(comments_like_resorted_one))))
+                comments_like.append(tf.convert_to_tensor(list(comments_like_resorted_one.numpy())+[0]*(num_comments-len(comments_like_resorted_one)), dtype=tf.float32))
 
     frames = [item['frames'] for item in batch]
     frames, frames_masks = pad_frame_sequence(num_frames, frames)
@@ -176,8 +176,8 @@ class Run():
         collate_fn=None
 
         if data_type=='SVFEND':
-            dataset_train = SVFENDDataset(f'vid_fold_{data_fold}.txt')
-            dataset_test = SVFENDDataset(f'vid_fold_{data_fold}.txt')
+            dataset_train = SVFENDDataset(f'vid_fold_no_{data_fold}.txt')
+            # dataset_test = SVFENDDataset(f'vid_fold_{data_fold}.txt')
             collate_fn=SVFEND_collate_fn
 
 
@@ -189,7 +189,7 @@ class Run():
             collate_fn=collate_fn)
         # train_dataloader = dataset_train
 
-        test_dataloader=DataLoader(dataset_test, batch_size=self.batch_size,
+        test_dataloader=DataLoader(dataset_train, batch_size=self.batch_size,
             num_workers=self.num_workers,
             pin_memory=True,
             shuffle=False,
@@ -204,7 +204,8 @@ class Run():
 
     def get_model(self):
         if self.model_name == 'SVFEND':
-            self.model = SVFENDModel(bert_model='bert-base-chinese', fea_dim=128,dropout=self.dropout)
+            # self.model = SVFENDModel(bert_model='google-bert/bert-base-chinese', fea_dim=128,dropout=self.dropout)
+            self.model = SVFENDModel(bert_model='google-bert/bert-base-chinese', fea_dim=8,dropout=self.dropout)
 
         return self.model
 
@@ -226,9 +227,6 @@ class Run():
         #     return result
         
         if self.mode_eval == "cv":
-            collate_fn=None
-            if self.model_name == 'TextCNN':
-                wv_from_text = KeyedVectors.load_word2vec_format("./stores/tencent-ailab-embedding-zh-d100-v0.2.0-s/tencent-ailab-embedding-zh-d100-v0.2.0-s.txt", binary=False)
 
             history = collections.defaultdict(list) 
             for fold in range(1, 3): ##############################################

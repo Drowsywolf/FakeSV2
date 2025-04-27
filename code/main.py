@@ -13,8 +13,8 @@ parser.add_argument('--model_name', default='SVFEND', help='SVFEND/FANVM/C3D/VGG
 parser.add_argument('--mode_eval', default= 'cv', help='nocv/cv/temporal')
 parser.add_argument('--fold', type=int,help='needed when model_eval=nocv') 
 
-parser.add_argument('--epoches', type=int, default=30)
-parser.add_argument('--batch_size', type = int, default=128)
+parser.add_argument('--epoches', type=int, default=5) #30
+parser.add_argument('--batch_size', type = int, default=20) #128
 parser.add_argument('--num_workers', type=int, default=0)
 parser.add_argument('--epoch_stop', type=int, default=5) 
 parser.add_argument('--seed', type=int, default=2022)

@@ -3,6 +3,7 @@ import json
 import os
 import time
 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import numpy as np
 import tensorflow as tf
 from sklearn.metrics import *
@@ -29,6 +30,8 @@ class Trainer3():
                 event_num,
                 save_threshold=0.0,
                 start_epoch=0):
+        
+        print("Trainer3, init")
 
         self.model = model
         self.mode = mode
@@ -54,6 +57,7 @@ class Trainer3():
         self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr)
 
     def train(self):
+        print("Training...")
 
         since = time.time()
 

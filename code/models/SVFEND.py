@@ -6,7 +6,7 @@ import time
 import numpy as np
 import tensorflow as tf
 from sklearn.metrics import *
-from transformers import TFBertModel
+from transformers import TFBertModel, BertModel, AutoModelForMaskedLM
 
 from .coattention import *
 from .layers import *
@@ -16,12 +16,14 @@ class SVFENDModel(tf.keras.Model):
     def __init__(self, bert_model, fea_dim, dropout):
         super(SVFENDModel, self).__init__()
 
-        self.bert = TFBertModel.from_pretrained(bert_model, trainable=False)
+        print("SVFENDModel, init")
 
-        self.text_dim = 768
-        self.comment_dim = 768
-        self.img_dim = 4096
-        self.video_dim = 4096
+        self.bert = TFBertModel.from_pretrained(bert_model)
+
+        self.text_dim = 48 #768
+        self.comment_dim = 48 #768
+        self.img_dim = 256 #4096
+        self.video_dim = 256 #4096
         self.num_frames = 83
         self.num_audioframes = 50
         self.num_comments = 23
@@ -72,6 +74,8 @@ class SVFENDModel(tf.keras.Model):
         ])
 
     def call(self, inputs):
+
+        print("SVFENDModel, call")
 
         intro_inputid = inputs['intro_inputid']
         intro_mask = inputs['intro_mask']

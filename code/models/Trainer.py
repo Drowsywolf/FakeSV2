@@ -40,6 +40,8 @@ class Trainer():
                  start_epoch = 0,
                  ):
         
+        print("Trainer, init")
+
         self.model = model
         self.device = device
         self.mode = mode
@@ -53,28 +55,29 @@ class Trainer():
         self.save_threshold = save_threshold
         self.writer = writer
 
-        if os.path.exists(save_param_path):
-            self.save_param_path = save_param_path
-        else:
-            self.save_param_path = os.makedirs(save_param_path)
-            self.save_param_path= save_param_path
+        if not os.path.exists(save_param_path):
+            os.makedirs(save_param_path)
+        self.save_param_path = save_param_path
 
         self.lr = lr
         self.weight_decay = weight_decay
         self.dropout = dropout
     
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.lr)
         
 
     def train(self):
+        print("Training...")
 
         since = time.time()
 
-        self.model.cuda()
 
-        best_model_wts_test = copy.deepcopy(self.model.state_dict())
+        # best_model_wts_test = self.model.get_weights()
+        # best_model_wts_test = copy.deepcopy(self.model.get_weights())
         best_acc_test = 0.0
         best_epoch_test = 0
+
         is_earlystop = False
 
         if self.mode == "eann":
@@ -90,13 +93,10 @@ class Trainer():
 
             p = float(epoch) / 100
             lr = self.lr / (1. + 10 * p) ** 0.75
-            self.optimizer = torch.optim.Adam(params=self.model.parameters(), lr=lr)
+            tf.keras.backend.set_value(self.optimizer.lr, lr)
             
             for phase in ['train', 'test']:
-                if phase == 'train':
-                    self.model.train()  
-                else:
-                    self.model.eval()   
+                training = (phase == 'train')  
                 print('-' * 10)
                 print (phase.upper())
                 print('-' * 10)
@@ -114,39 +114,39 @@ class Trainer():
                 for batch in tqdm(self.dataloaders[phase]):
                     batch_data=batch
                     for k,v in batch_data.items():
-                        batch_data[k]=v.cuda()
+                        batch_data[k]=v
                     label = batch_data['label']
                     if self.mode == "eann":
                         label_event = batch_data['label_event']
 
                 
-                    with torch.set_grad_enabled(phase == 'train'):
+                    with tf.GradientTape() as tape:
                         if self.mode == "eann":
-                            outputs, outputs_event,fea = self.model(**batch_data)
+                            outputs, outputs_event,fea = self.model(batch_data, training=training)
                             loss_fnd = self.criterion(outputs, label)
                             loss_event = self.criterion(outputs_event, label_event)
                             loss = loss_fnd + loss_event
-                            _, preds = torch.max(outputs, 1)
-                            _, preds_event = torch.max(outputs_event, 1)
+                            preds = tf.argmax(outputs, axis=-1)
+                            preds_event = tf.argmax(outputs_event, axis=-1)
                         else:
-                            outputs,fea = self.model(**batch_data)
-                            _, preds = torch.max(outputs, 1)
+                            outputs,fea = self.model(batch_data, training=training)
+                            preds = tf.argmax(outputs, axis=-1)
                             loss = self.criterion(outputs, label)
 
                         if phase == 'train':
-                            loss.backward()
-                            self.optimizer.step()
-                            self.optimizer.zero_grad()
+                            gradients = tape.gradient(loss, self.model.trainable_variables)
+                            gradients = [tf.clip_by_norm(g, 1.0) for g in gradients]
+                            self.optimizer.apply_gradients(zip(gradients, self.model.trainable_variables))
 
-                    tlabel.extend(label.detach().cpu().numpy().tolist())
-                    tpred.extend(preds.detach().cpu().numpy().tolist())
-                    running_loss += loss.item() * label.size(0)
+                    tlabel.extend(label.numpy().tolist())
+                    tpred.extend(preds.numpy().tolist())
+                    running_loss += loss.numpy() * label.shape[0]
 
                     if self.mode == "eann":
-                        tlabel_event.extend(label_event.detach().cpu().numpy().tolist())
-                        tpred_event.extend(preds_event.detach().cpu().numpy().tolist())
-                        running_loss_event += loss_event.item() * label_event.size(0)
-                        running_loss_fnd += loss_fnd.item() * label.size(0)
+                        tlabel_event.extend(label_event.numpy().tolist())
+                        tpred_event.extend(preds_event.numpy().tolist())
+                        running_loss_event += loss_event.numpy() * label_event.shape[0]
+                        running_loss_fnd += loss_fnd.numpy() * label.shape[0]
                     
                 epoch_loss = running_loss / len(self.dataloaders[phase].dataset)
                 print('Loss: {:.4f} '.format(epoch_loss))
@@ -167,10 +167,10 @@ class Trainer():
                 if phase == 'test':
                     if results['acc'] > best_acc_test:
                         best_acc_test = results['acc']
-                        best_model_wts_test = copy.deepcopy(self.model.state_dict())
-                        best_epoch_test = epoch+1
+                        best_model_wts_test = self.model.get_weights()
+                        best_epoch_test = epoch + 1
                         if best_acc_test > self.save_threshold:
-                            torch.save(self.model.state_dict(), self.save_param_path + "_test_epoch" + str(best_epoch_test) + "_{0:.4f}".format(best_acc_test))
+                            self.model.save_weights(self.save_param_path + f"_val_epoch{best_epoch_test}_{best_acc_test:.4f}")
                             print ("saved " + self.save_param_path + "_test_epoch" + str(best_epoch_test) + "_{0:.4f}".format(best_acc_test) )
                     else:
                         if epoch-best_epoch_test >= self.epoch_stop-1:
@@ -185,15 +185,12 @@ class Trainer():
         if self.mode == "eann":
             print("Event: Best model on test: epoch" + str(best_epoch_test_event) + "_" + str(best_acc_test_event))
 
-        self.model.load_state_dict(best_model_wts_test)
+        self.model.set_weights(best_model_wts_test)
         return self.test()
 
 
     def test(self):
         since = time.time()
-
-        self.model.cuda()
-        self.model.eval()   
 
         pred = []
         label = []
@@ -202,27 +199,21 @@ class Trainer():
             pred_event = []
             label_event = []
 
-        for batch in tqdm(self.dataloaders['test']):
-            with torch.no_grad(): 
-                batch_data=batch
-                for k,v in batch_data.items():
-                    batch_data[k]=v.cuda()
-                batch_label = batch_data['label']
+        for batch_data in tqdm(self.dataloaders['test']):
+                label_batch = batch_data['label']
 
                 if self.mode == "eann":
-                    batch_label_event = batch_data['label_event']
-                    batch_outputs, batch_outputs_event, fea = self.model(**batch_data)
-                    _, batch_preds_event = torch.max(batch_outputs_event, 1)
-
-                    label_event.extend(batch_label_event.detach().cpu().numpy().tolist())
-                    pred_event.extend(batch_preds_event.detach().cpu().numpy().tolist())
+                    label_event_batch = batch_data['label_event']
+                    outputs, outputs_event, fea = self.model(batch_data, training=False)
+                    preds_event = tf.argmax(outputs_event, axis=-1)
+                    label_event.extend(label_event_batch.numpy().tolist())
+                    pred_event.extend(preds_event.numpy().tolist())
                 else: 
-                    batch_outputs,fea = self.model(**batch_data) 
+                    outputs, fea = self.model(batch_data, training=False)
 
-                _, batch_preds = torch.max(batch_outputs, 1)
-
-                label.extend(batch_label.detach().cpu().numpy().tolist())
-                pred.extend(batch_preds.detach().cpu().numpy().tolist())
+                preds = tf.argmax(outputs, axis=-1)
+                label.extend(label_batch.numpy().tolist())
+                pred.extend(preds.numpy().tolist())
 
         print (get_confusionmatrix_fnd(np.array(pred), np.array(label)))
         print (metrics(label, pred))
